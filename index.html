@@ -38,14 +38,36 @@
         }
 
         .input-group { display: grid; gap: 16px; margin-bottom: 1.5rem; }
-        label { display: block; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.05em; }
+        
+        .label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        label { 
+            display: block; 
+            font-size: 0.75rem; 
+            color: var(--text-secondary); 
+            text-transform: uppercase; 
+            letter-spacing: 0.05em; 
+        }
+
+        .helper-link {
+            font-size: 0.7rem;
+            color: var(--blue);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .helper-link:hover { text-decoration: underline; }
         
         input {
             width: 100%; padding: 12px; background: #0f172a; border: 1px solid var(--border);
             border-radius: 8px; color: white; outline: none; box-sizing: border-box; font-size: 1rem;
         }
 
-        /* Fixed Grid Distribution: Gives starting capital more breathing room */
         .grid-3 { 
             display: grid; 
             grid-template-columns: 1.3fr 1fr 1fr; 
@@ -53,9 +75,7 @@
         }
 
         @media (max-width: 600px) {
-            .grid-3 {
-                grid-template-columns: 1fr;
-            }
+            .grid-3 { grid-template-columns: 1fr; }
         }
 
         button {
@@ -112,8 +132,11 @@
             <input type="text" id="tickers" placeholder="NVDA, TSLA, BTCUSD, COIN, AMD, MSTR">
         </div>
         <div>
-            <label>Polygon API Key</label>
-            <input type="password" id="polygon_key" placeholder="Enter API Key">
+            <div class="label-row">
+                <label>Polygon API Key</label>
+                <a href="https://polygon.io/dashboard/api-keys" target="_blank" class="helper-link">Get Key →</a>
+            </div>
+            <input type="password" id="polygon_key" placeholder="Paste your API key here">
         </div>
     </div>
 
@@ -128,7 +151,6 @@
 <script>
 const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
-// Setup dates
 const today = new Date().toISOString().split('T')[0];
 const sixtyAgo = new Date(Date.now() - 60*24*60*60*1000).toISOString().split('T')[0];
 document.getElementById('start').value = sixtyAgo;
@@ -172,7 +194,7 @@ async function runCompoundingScan() {
                 for (let x = 0; x < prices.length; x++) {
                     for (let y = x + 1; y < prices.length; y++) {
                         const gainPct = ((prices[y].c - prices[x].c) / prices[x].c) * 100;
-                        if (gainPct <= 0.5) continue; // Ignore noise
+                        if (gainPct <= 0.5) continue;
                         const days = Math.max(1, Math.round((prices[y].t - prices[x].t) / 86400000));
                         masterTradeList.push({
                             ticker, entryDate: prices[x].t, exitDate: prices[y].t,
@@ -202,7 +224,6 @@ async function runCompoundingScan() {
         }
         path.sort((a, b) => a.entryDate - b.entryDate);
 
-        // Compounding Logic
         let currentBalance = startCap;
         const sprintList = document.getElementById('sprintList');
         sprintList.innerHTML = '';
