@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio Velocity Compounder</title>
+    <style>
+        :root {
+            --bg-main: #0f172a;
+            --bg-card: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent: #10b981;
+            --danger: #ef4444;
+            --border: #334155;
+            --blue: #3b82f6;
+            --gold: #fbbf24;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-main); color: var(--text-primary);
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; margin: 0; padding: 20px;
+        }
+
+        .container {
+            width: 100%; max-width: 800px; background: var(--bg-card);
+            padding: 2rem; border-radius: 16px; border: 1px solid var(--border);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+        }
+
+        .status-box {
+            background: #0f172a; border: 1px solid var(--blue);
+            padding: 12px; border-radius: 8px; margin-bottom: 1rem;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--blue);
+            display: none;
+        }
+
+        .input-group { display: grid; gap: 16px; margin-bottom: 1.5rem; }
+        label { display: block; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.05em; }
+        
+        input {
+            width: 100%; padding: 12px; background: #0f172a; border: 1px solid var(--border);
+            border-radius: 8px; color: white; outline: none; box-sizing: border-box; font-size: 1rem;
+        }
+
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+        button {
+            width: 100%; padding: 16px; background-color: var(--blue);
+            color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer;
+            transition: transform 0.1s;
+        }
+        button:active { transform: scale(0.98); }
+        button:disabled { background-color: var(--border); opacity: 0.7; }
+
+        .results-section { margin-top: 2rem; display: none; }
+        
+        .sprint-card {
+            background: linear-gradient(90deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.05) 100%);
+            border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; margin-bottom: 12px;
+            display: grid; grid-template-columns: 80px 1fr 140px; align-items: center;
+            position: relative; overflow: hidden;
+        }
+
+        .growth-line {
+            position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--accent);
+        }
+
+        .ticker-pill { background: var(--blue); padding: 4px 8px; border-radius: 4px; font-weight: 900; font-size: 0.75rem; }
+        
+        .balance-info { text-align: right; }
+        .curr-bal { font-size: 1.1rem; font-weight: 800; color: var(--accent); }
+        .prev-bal { font-size: 0.75rem; color: var(--text-secondary); }
+
+        .total-summary {
+            background: rgba(16, 185, 129, 0.1); border: 1px solid var(--accent);
+            padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem; text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div style="text-align:center; margin-bottom: 1.5rem;">
+        <h2 style="margin:0; font-size: 1.8rem;">Velocity Growth Engine</h2>
+        <p style="color: var(--text-secondary); font-size: 0.9rem;">Visualizing Sequential Compounding</p>
+    </div>
+
+    <div id="status" class="status-box"></div>
+    
+    <div class="input-group">
+        <div class="grid-3">
+            <div><label>Start Capital ($)</label><input type="number" id="capital" value="10000"></div>
+            <div><label>Start Date</label><input type="date" id="start"></div>
+            <div><label>End Date</label><input type="date" id="end"></div>
+        </div>
+        <div>
+            <label>Tickers (Comma Separated)</label>
+            <input type="text" id="tickers" placeholder="NVDA, TSLA, BTCUSD, COIN, AMD, MSTR">
+        </div>
+        <div>
+            <label>Polygon API Key</label>
+            <input type="password" id="polygon_key" placeholder="Enter API Key">
+        </div>
+    </div>
+
+    <button id="goBtn" onclick="runCompoundingScan()">Analyze & Compound Path</button>
+
+    <div id="results" class="results-section">
+        <div id="summary" class="total-summary"></div>
+        <div id="sprintList"></div>
+    </div>
+</div>
+
+<script>
+const delay = (ms) => new Promise(res => setTimeout(res, ms));
+
+// Setup dates
+const today = new Date().toISOString().split('T')[0];
+const sixtyAgo = new Date(Date.now() - 60*24*60*60*1000).toISOString().split('T')[0];
+document.getElementById('start').value = sixtyAgo;
+document.getElementById('end').value = today;
+
+const savedKey = localStorage.getItem('polygon_persistent_key');
+if (savedKey) document.getElementById('polygon_key').value = savedKey;
+
+function updateStatus(msg) {
+    const box = document.getElementById('status');
+    box.style.display = 'block';
+    box.textContent = `> ${msg}`;
+}
+
+async function runCompoundingScan() {
+    const startCap = parseFloat(document.getElementById('capital').value) || 1000;
+    const tickerInput = document.getElementById('tickers').value.trim().toUpperCase();
+    const start = document.getElementById('start').value;
+    const end = document.getElementById('end').value;
+    const apiKey = document.getElementById('polygon_key').value.trim();
+    const btn = document.getElementById('goBtn');
+    
+    if (!tickerInput || !apiKey) return;
+    localStorage.setItem('polygon_persistent_key', apiKey);
+    
+    btn.disabled = true;
+    let tickerList = tickerInput.split(',').map(t => t.trim()).filter(t => t);
+    let masterTradeList = [];
+
+    try {
+        for (let i = 0; i < tickerList.length; i++) {
+            const ticker = tickerList[i];
+            updateStatus(`Fetching ${ticker} (${i+1}/${tickerList.length})...`);
+            
+            const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/day/${start}/${end}?adjusted=true&sort=asc&apiKey=${apiKey}`;
+            const res = await fetch(url);
+            const data = await res.json();
+
+            if (data.results) {
+                const prices = data.results;
+                for (let x = 0; x < prices.length; x++) {
+                    for (let y = x + 1; y < prices.length; y++) {
+                        const gainPct = ((prices[y].c - prices[x].c) / prices[x].c) * 100;
+                        if (gainPct <= 0.5) continue; // Ignore noise
+                        const days = Math.max(1, Math.round((prices[y].t - prices[x].t) / 86400000));
+                        masterTradeList.push({
+                            ticker, entryDate: prices[x].t, exitDate: prices[y].t,
+                            entryP: prices[x].c, exitP: prices[y].c,
+                            gain: gainPct, days,
+                            apr: (Math.pow(1 + (gainPct/100), 365/days) - 1) * 100
+                        });
+                    }
+                }
+            }
+            if (i < tickerList.length - 1) {
+                for(let sec = 12; sec > 0; sec--) {
+                    updateStatus(`Throttling: Next request in ${sec}s...`);
+                    await delay(1000);
+                }
+            }
+        }
+
+        updateStatus("Calculating optimal growth path...");
+        masterTradeList.sort((a, b) => b.apr - a.apr);
+        
+        let path = [];
+        for (let t of masterTradeList) {
+            if (!path.some(s => (t.entryDate < s.exitDate && t.exitDate > s.entryDate))) {
+                path.push(t);
+            }
+        }
+        path.sort((a, b) => a.entryDate - b.entryDate);
+
+        // Compounding Logic
+        let currentBalance = startCap;
+        const sprintList = document.getElementById('sprintList');
+        sprintList.innerHTML = '';
+
+        path.forEach(s => {
+            const startOfTrade = currentBalance;
+            currentBalance = currentBalance * (1 + (s.gain / 100));
+            
+            sprintList.innerHTML += `
+                <div class="sprint-card">
+                    <div class="growth-line"></div>
+                    <div><span class="ticker-pill">${s.ticker}</span></div>
+                    <div>
+                        <p style="margin:0; font-weight:600;">${new Date(s.entryDate).toLocaleDateString()} — ${new Date(s.exitDate).toLocaleDateString()}</p>
+                        <p style="margin:0; font-size:0.8rem; color:var(--text-secondary);">${s.days} days | +${s.gain.toFixed(2)}% move</p>
+                    </div>
+                    <div class="balance-info">
+                        <div class="curr-bal">$${currentBalance.toLocaleString(undefined, {maximumFractionDigits:0})}</div>
+                        <div class="prev-bal">from $${startOfTrade.toLocaleString(undefined, {maximumFractionDigits:0})}</div>
+                    </div>
+                </div>`;
+        });
+
+        const totalGain = ((currentBalance - startCap) / startCap * 100).toFixed(2);
+        document.getElementById('summary').innerHTML = `
+            <div style="font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Final Compound Balance</div>
+            <div style="font-size: 2.5rem; font-weight: 900; color: white;">$${currentBalance.toLocaleString(undefined, {maximumFractionDigits:0})}</div>
+            <div style="color: var(--accent); font-weight: 700; margin-top: 5px;">+${totalGain}% Total Return</div>
+        `;
+
+        document.getElementById('results').style.display = 'block';
+        updateStatus("Analysis Complete.");
+
+    } catch (e) {
+        updateStatus("Error: " + e.message);
+    } finally {
+        btn.disabled = false;
+    }
+}
+</script>
+</body>
+</html>
